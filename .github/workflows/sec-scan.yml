@@ -1,0 +1,46 @@
+name: CI - Security Scan
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image
+      run: docker build -t vuln-app:latest .
+
+    - name: Hadolint - Dockerfile lint
+      uses: hadolint/hadolint-action@v2
+      with:
+        dockerfile: Dockerfile
+
+    - name: Trivy - Scan image for high/critical vulns
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: vuln-app:latest
+        format: 'table'
+        severity: 'HIGH,CRITICAL'
+        exit-code: '1'              # exit non-zero on findings
+        scan-type: 'image'
+
+    - name: Set up Python for Bandit
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+
+    - name: Install Bandit
+      run: pip install bandit
+
+    - name: Bandit - run security scanner
+      run: bandit -r . -lll -ii --severity-level high || exit 0
